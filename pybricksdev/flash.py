@@ -234,13 +234,6 @@ class BootloaderConnection(BLERequestsConnection):
         0x11, 'Erase', ['result'], '<B', write_with_response=False
     )
 
-    # City hub bootloader always sends write response for most commands even
-    # when write without response is used which confuses Bluetooth stacks, so
-    # we always have to do write with response.
-    ERASE_FLASH_CITY_HUB = BootloaderRequest(
-        0x11, 'Erase', ['result'], '<B'
-    )
-
     # Only the final flash message receives a reply.
     PROGRAM_FLASH = BootloaderRequest(
         0x22, 'Flash', [], '', request_reply=False, write_with_response=False
@@ -319,15 +312,18 @@ class BootloaderConnection(BLERequestsConnection):
         # Erase existing firmware
         logger.debug("Erasing flash.")
         try:
-            response = await self.bootloader_request(
-                self.ERASE_FLASH_CITY_HUB
-                if info.type_id == HubTypeId.CITY_HUB
-                else self.ERASE_FLASH,
-                timeout=5
-            )
+            response = await self.bootloader_request(self.ERASE_FLASH, timeout=5)
             logger.debug(response)
         except asyncio.TimeoutError:
             logger.info("did not receive erase reply, continuing anyway")
+
+        # On City Hub with some Windows versions, the reply to the flash command is not
+        # received by this script until after the next message is sent. This confuses
+        # messages that come after. Here we send a bogus message without checking what
+        # comes back to flush that response.
+        if info.type_id == HubTypeId.CITY_HUB:
+            response = await self.write(bytearray((self.GET_CHECKSUM.command,)), True)
+            await asyncio.sleep(2)
 
         # Get the bootloader ready to accept the firmware
         logger.debug('Request begin update.')
