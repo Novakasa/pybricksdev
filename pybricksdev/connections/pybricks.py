@@ -79,6 +79,7 @@ class PybricksHub:
         self.disconnect_observable = AsyncSubject()
         self.status_observable = BehaviorSubject(StatusFlag(0))
         self.nus_observable = Subject()
+        self.output_observable = Subject()
         self.stream_buf = bytearray()
         self.output = []
         self.print_output = True
@@ -140,8 +141,10 @@ class PybricksHub:
             print(line.decode(), file=self.log_file)
             return
 
-        # If there is nothing special about this line, print it if requested.
         self.output.append(line)
+        self.output_observable.on_next(line)
+
+        # If there is nothing special about this line, print it if requested.
         if self.print_output:
             print(line.decode())
 
